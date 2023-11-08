@@ -142,8 +142,14 @@ NOTES:
  *   Max ops: 14
  *   Rating: 1
  */
+/*
+      0 1
+   0  0 1
+   1  1 0
+  对着真值表试
+*/
 int bitXor(int x, int y) {
-  return 2;
+  return (~(x & y) & ~(~x & ~y));
 }
 /* 
  * tmin - return minimum two's complement integer 
@@ -151,9 +157,12 @@ int bitXor(int x, int y) {
  *   Max ops: 4
  *   Rating: 1
  */
+/*
+  B2T(w)   -公式2.1
+  直接左移31位
+*/
 int tmin(void) {
-
-  return 2;
+  return (0x1 << 31);
 
 }
 //2
@@ -164,8 +173,15 @@ int tmin(void) {
  *   Max ops: 10
  *   Rating: 1
  */
+/*
+  B(Tmax) = 01111111 11111111 11111111 11111111
+  (!(~x ^ (x + 0x1))) 用来判定是 Tmax
+  !!~x 用来排除 x = -1 的case
+*/
 int isTmax(int x) {
-  return 2;
+  //return (!(~x ^ (x + 0x1))) & (!x);
+  //return !(~((~0x0 + ~x) & x) ^ (x + 0x1));
+  return (!(~x ^ (x + 0x1))) & !!~x;
 }
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -175,8 +191,14 @@ int isTmax(int x) {
  *   Max ops: 12
  *   Rating: 2
  */
+/*
+  当且仅当 x == mask 时， (x & mask) ^ mask == 0
+*/
 int allOddBits(int x) {
-  return 2;
+  //return !(((x & 0xAA) ^ 0xAA) + (((x >> 8) & 0xAA) ^ 0xAA) 
+  //      + (( (x >> 16) & 0xAA) ^ 0xAA) + (( (x >> 24) & 0xAA) ^ 0xAA));
+  int mask = 0xAA + (0xAA << 8) + (0xAA << 16) + (0xAA << 24);
+  return !((x & mask) ^ mask);
 }
 /* 
  * negate - return -x 
@@ -185,8 +207,11 @@ int allOddBits(int x) {
  *   Max ops: 5
  *   Rating: 2
  */
+/*
+  补码性质：取反加一
+*/
 int negate(int x) {
-  return 2;
+  return ~x + 1;
 }
 //3
 /* 
@@ -198,8 +223,14 @@ int negate(int x) {
  *   Max ops: 15
  *   Rating: 3
  */
+/*
+ 用到了补码存在的意义--使用加法器就可以实现减法
+ 如果 0x30 <= x <= 0x39， x - 0x30 >= 0 and x - 0x3a < 0
+*/
 int isAsciiDigit(int x) {
-  return 2;
+  int left = x + (~0x30 + 1);
+  int right = x + (~0x3a + 1);
+  return (!(left >> 31)) & (right >> 31);
 }
 /* 
  * conditional - same as x ? y : z 
@@ -208,8 +239,14 @@ int isAsciiDigit(int x) {
  *   Max ops: 16
  *   Rating: 3
  */
+/*
+  算数右移性质：高位补1
+  x == True， !!x == 0x1, mask == -1(二进制全1)
+  x == False, !!x == 0x0, mask == 0(二进制全0)
+*/
 int conditional(int x, int y, int z) {
-  return 2;
+  int mask = ((!!x << 31) >> 31);       // 算数右移
+  return (mask & y) | (~mask & z);
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
@@ -219,7 +256,10 @@ int conditional(int x, int y, int z) {
  *   Rating: 3
  */
 int isLessOrEqual(int x, int y) {
-  return 2;
+  // y - x >= 0
+  int neg_flag = (x >> 31 & 0x01) | (!(y >> 31 & 0x01));  // neg_flag = 0 if y < 0 and x >= 0, else neg_flag = 1
+  int pos_flag = (!(y >> 31 & 0x01)) & (x >> 31 & 0x01);  // pos_flag = 1 if y >= 0 and x < 0
+  return pos_flag | (neg_flag & (!((y + (~x + 0x01)) >> 31 & 0x01)));
 }
 //4
 /* 
@@ -231,7 +271,7 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4 
  */
 int logicalNeg(int x) {
-  return 2;
+  return (~x >> 31 & 0x01) & (~(x + (~(0x01 << 31))) >> 31);
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -245,8 +285,41 @@ int logicalNeg(int x) {
  *  Max ops: 90
  *  Rating: 4
  */
+/*
+  这个真不会
+  规律大概找出来了，对于正数，最高为1的bit位+1；负数取反同正数
+  但是要满足操作数小于90，得二分
+  二分其实也想到了，但是不知道咋写
+*/
 int howManyBits(int x) {
-  return 0;
+
+  int mask = (~(x >> 31));         // is 0xFFFFFFFF if x >= 0, is 0x00 if x < 0 
+  x = (~(x ^ mask));
+
+  //mask = 0x01;
+  //int res = 0;
+
+  //x >>= 1; res += !!x;
+  int isRs16Not0=!!((x>>16)^0);  //判断右移16后是否为0,非0为1,是0则为0
+    int needRs16=isRs16Not0<<4;    //计算右移位数,上一步 isRs16Not0=0时，则无需右移, 否则右移16位
+                                   //即isRs16Not0==0? 0:16
+    x>>=needRs16;   //进行右移操作,无论如何,这一步要有.  
+    int isRs8Not0=!!((x>>8)^0);
+    int needRs8=isRs8Not0<<3;
+    x>>=needRs8;
+    int isRs4Not0=!!((x>>4)^0);
+    int needRs4=isRs4Not0<<2;
+    x>>=needRs4;
+    int isRs2Not0=!!((x>>2)^0);
+    int needRs2=isRs2Not0<<1;
+    x>>=needRs2;
+    int isRs1Not0=!!((x>>1)^0);  //如果右移一位后是0,则不会右移,此时x一定是:...0001, 最后统计rsCnt时,要加1
+    int needRs1=isRs1Not0;       //如果右移一位后不是0,则右移一位后,x一定是:...0001
+    x>>=needRs1;    
+
+    int rsCnt=needRs16+needRs8+needRs4+needRs2+needRs1+x; //最后+x, 对于非0数, 最后一定剩下一个1，右移1位即可,
+                                                          //对于0,从头到位都是0,不需要再+1
+    return rsCnt+1;
 }
 //float
 /* 
